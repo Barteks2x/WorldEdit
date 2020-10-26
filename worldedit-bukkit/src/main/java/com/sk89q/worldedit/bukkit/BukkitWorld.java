@@ -66,6 +66,9 @@ import com.sk89q.worldedit.world.registry.WorldData;
 public class BukkitWorld extends LocalWorld {
 
     private static final Logger logger = WorldEdit.logger;
+    
+    private int worldMinHeight = 0;
+    private boolean cachedWorldMinHeight = false;
 
     private static final Map<Integer, Effect> effects = new HashMap<Integer, Effect>();
     static {
@@ -371,27 +374,31 @@ public class BukkitWorld extends LocalWorld {
     
     @Override
     public int getMinY() {
-        /*
-         * The forge version relies on CC to patch this method at run time,
-         * so it does the following: return ((ICubicWorld) getWorld()).getMinHeight();
-         * 
-         * So the idea here is to: 
-         *  - get a reference to the the world field of the CraftWorld which implements org.bukkit.org
-         *  - it's private, so make it accessible
-         *  - Use it to retrieve a reference to the NMS world
-         *  - If CC is installed, this world should have gotten a getMinHeight method injected by the MixinWorld CC mixin, get that
-         *  - And call that getMinHeight method to get the minimum world height.
-         * 
-         */
-        try {
-            World bukkitWorld = getWorld();
-            Field worldField = bukkitWorld.getClass().getDeclaredField("world");
-            worldField.setAccessible(true);
-            Object nmsWorld = worldField.get(bukkitWorld);
-            java.lang.reflect.Method getMinHeight = nmsWorld.getClass().getMethod("getMinHeight");
-            return (int) getMinHeight.invoke(nmsWorld);
-        } catch(Exception | Error silenced) {}
-        return 0;
+        if(!cachedWorldMinHeight) {
+            /*
+             * The forge version relies on CC to patch this method at run time,
+             * so it does the following: return ((ICubicWorld) getWorld()).getMinHeight();
+             * 
+             * So the idea here is to: 
+             *  - get a reference to the the world field of the CraftWorld which implements org.bukkit.org
+             *  - it's private, so make it accessible
+             *  - Use it to retrieve a reference to the NMS world
+             *  - If CC is installed, this world should have gotten a getMinHeight method injected by the MixinWorld CC mixin, get that
+             *  - And call that getMinHeight method to get the minimum world height.
+             * 
+             */
+            try {
+                World bukkitWorld = getWorld();
+                Field worldField = bukkitWorld.getClass().getDeclaredField("world");
+                worldField.setAccessible(true);
+                Object nmsWorld = worldField.get(bukkitWorld);
+                java.lang.reflect.Method getMinHeight = nmsWorld.getClass().getMethod("getMinHeight");
+                worldMinHeight = (int) getMinHeight.invoke(nmsWorld);
+            } catch(Exception | Error silenced) {}
+            cachedWorldMinHeight = true;
+        }
+        return this.worldMinHeight;
+        
     }
 
     @Override
