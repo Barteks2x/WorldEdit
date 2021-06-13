@@ -19,6 +19,33 @@
 
 package com.sk89q.worldedit.bukkit;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import java.lang.ref.WeakReference;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import javax.annotation.Nullable;
+
+import org.bukkit.Effect;
+import org.bukkit.Material;
+import org.bukkit.TreeType;
+import org.bukkit.World;
+import org.bukkit.block.Biome;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.Chest;
+import org.bukkit.entity.Entity;
+import org.bukkit.inventory.DoubleChestInventory;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
+
 import com.sk89q.worldedit.BlockVector2D;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.LocalWorld;
@@ -35,34 +62,13 @@ import com.sk89q.worldedit.regions.Region;
 import com.sk89q.worldedit.util.TreeGenerator;
 import com.sk89q.worldedit.world.biome.BaseBiome;
 import com.sk89q.worldedit.world.registry.WorldData;
-import org.bukkit.Effect;
-import org.bukkit.Material;
-import org.bukkit.TreeType;
-import org.bukkit.World;
-import org.bukkit.block.Biome;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Chest;
-import org.bukkit.entity.Entity;
-import org.bukkit.inventory.DoubleChestInventory;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-
-import javax.annotation.Nullable;
-import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import static com.google.common.base.Preconditions.checkNotNull;
 
 public class BukkitWorld extends LocalWorld {
 
     private static final Logger logger = WorldEdit.logger;
+    
+    private int worldMinHeight = 0;
+    private boolean cachedWorldMinHeight = false;
 
     private static final Map<Integer, Effect> effects = new HashMap<Integer, Effect>();
     static {
@@ -364,6 +370,35 @@ public class BukkitWorld extends LocalWorld {
     @Override
     public int getMaxY() {
         return getWorld().getMaxHeight() - 1;
+    }
+    
+    @Override
+    public int getMinY() {
+        if(!cachedWorldMinHeight) {
+            /*
+             * The forge version relies on CC to patch this method at run time,
+             * so it does the following: return ((ICubicWorld) getWorld()).getMinHeight();
+             * 
+             * So the idea here is to: 
+             *  - get a reference to the the world field of the CraftWorld which implements org.bukkit.org
+             *  - it's private, so make it accessible
+             *  - Use it to retrieve a reference to the NMS world
+             *  - If CC is installed, this world should have gotten a getMinHeight method injected by the MixinWorld CC mixin, get that
+             *  - And call that getMinHeight method to get the minimum world height.
+             * 
+             */
+            try {
+                World bukkitWorld = getWorld();
+                Field worldField = bukkitWorld.getClass().getDeclaredField("world");
+                worldField.setAccessible(true);
+                Object nmsWorld = worldField.get(bukkitWorld);
+                java.lang.reflect.Method getMinHeight = nmsWorld.getClass().getMethod("getMinHeight");
+                worldMinHeight = (int) getMinHeight.invoke(nmsWorld);
+            } catch(Exception | Error silenced) {}
+            cachedWorldMinHeight = true;
+        }
+        return this.worldMinHeight;
+        
     }
 
     @Override

@@ -64,7 +64,7 @@ public class LocalWorldAdapter extends LocalWorld {
 
     @Override
     public int getMinY() {
-        return super.getMinY();
+        return world.getMinY();
     }
 
     @Override
